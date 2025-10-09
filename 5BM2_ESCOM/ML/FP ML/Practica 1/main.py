@@ -38,9 +38,9 @@ for i, (train_index, test_index) in enumerate(LOO.split(x_train)):
 print("\nBootstrap\n")
 
 for i in range(1,3):
-    features, targets_nu =resample(data,data,replace=True,n_samples=9,)
+    features, targets_nu =resample(x_train,x_train,replace=True,n_samples=9,)
 
-    targets = data.loc[~data.index.isin(features.index)]
+    targets = x_train.loc[~x_train.index.isin(features.index)]
 
     print(f"C{i}\n")
     print("Conjunto de entrenamiento: \n", features.T,"\n")
