@@ -1,202 +1,238 @@
+#include "AFD.h"
 #include <iostream>
-#include <cstdio>
 #include <cstring>
 #include <cstdlib>
-#include <fstream>
-#include "AFD.h"
 
 using namespace std;
 
-void AFD::agregarEstado(const char* nombre, int esInicial, int esAceptacion)
+AFD::~AFD()
 {
-    Nodo *nuevoArr = new Nodo[numEstados + 1];
-    int i,len;
+    for(int i=0;i<numEstados;i++){
+        delete[] estados[i]->nombre;
+        for(int j=0;j<estados[i]->numSimbolos;j++)
+            delete[] estados[i]->simbolos[j];
+        delete[] estados[i]->simbolos;
+        delete[] estados[i]->longitudSimbolos;
+        delete[] estados[i]->transiciones;
+        delete estados[i];
+    }
+    delete[] estados;
 
-    for(i = 0; i < numEstados; i++)
+    for(int i=0;i<numAlfabeto;i++)
+        delete[] alfabeto[i];
+    delete[] alfabeto;
+    delete[] longitudAlfabeto;
+}
+
+Nodo* AFD::buscarEstado(const char *nombre)
+{
+    for(int i=0;i<numEstados;i++)
+        if(strcmp(estados[i]->nombre, nombre) == 0)
+            return estados[i];
+    return nullptr;
+}
+
+void AFD::agregarEstado(const char *nombre, int esInicial, int esAceptacion)
+{
+    Nodo **nuevoArr = new Nodo*[numEstados + 1];
+    for(int i=0;i<numEstados;i++)
         nuevoArr[i] = estados[i];
 
+    Nodo *nuevo = new Nodo();
+    int len = strlen(nombre);
+    nuevo->nombre = new char[len + 1];
+    strcpy(nuevo->nombre, nombre);
+    nuevo->numNombre = len;
+    nuevo->esInicial = esInicial;
+    nuevo->esAceptacion = esAceptacion;
+
+    nuevoArr[numEstados] = nuevo;
     delete[] estados;
     estados = nuevoArr;
-
-    estados[numEstados].esInicial = esInicial;
-    estados[numEstados].esAceptacion = esAceptacion;
-
-    len = strlen(nombre);
-    estados[numEstados].nombre = new char[len + 1];
-    strcpy(estados[numEstados].nombre, nombre);
-    estados[numEstados].numNombre = len;
-
     numEstados++;
+
+    if(esInicial) estadoInicial = nuevo;
 }
 
-void AFD::agregarSimbolo(const char* simbolo)
+
+void AFD::agregarTransicion(const char *origen, const char *destino, const char *simbolo)
 {
-    char **nuevoArr = new char*[numSimbolos + 1];
-    int* nuevoNumAlfabeto = new int[numSimbolos + 1];
-    int i, len;
-
-    for(i = 0; i < numSimbolos; i++)
-    {
-        nuevoArr[i] = alfabeto[i];
-        nuevoNumAlfabeto[i] = numAlfabeto[i];
-    }
-
-    len = strlen(simbolo);
-    nuevoArr[numSimbolos] = new char[len + 1];
-    strcpy(nuevoArr[numSimbolos],simbolo);
-    nuevoNumAlfabeto[numSimbolos] = len;
-
-    delete[] alfabeto;
-    delete[] numAlfabeto;
-
-    alfabeto = nuevoArr;
-    numAlfabeto = nuevoNumAlfabeto;
-    numSimbolos++;
-}
-
-void AFD::agregarTransicion(const char* origen, const char* destino, const char* simbolo)
-{
-    Nodo *nodoOrigen = nullptr;
-    Nodo *nodoDestino = nullptr;
-    int i;
-
-    for(i = 0; i < numEstados; i++)
-    {
-        if(strcmp(estados[i].nombre, origen) == 0) nodoOrigen = &estados[i];
-        if(strcmp(estados[i].nombre, destino) == 0) nodoDestino = &estados[i];
-    }
+    Nodo *nodoOrigen = buscarEstado(origen);
+    Nodo *nodoDestino = buscarEstado(destino);
 
     if(nodoOrigen && nodoDestino)
         nodoOrigen->agregarTransicion(nodoDestino, simbolo);
 }
-//corte
-int AFD::evaluarCadena(const char* cadena)
+
+
+void AFD::leerDesdeArchivo(const char *nombreArchivo)
 {
-    Nodo* actual = nullptr;
-    for (int i = 0; i < numEstados; ++i) {
-        if (estados[i].esInicial) {
-            actual = &estados[i];
-            break;
+    ifstream archivo(nombreArchivo);
+    if(!archivo.is_open()){
+        cout << "Error: no se pudo abrir " << nombreArchivo << endl;
+        return;
+    }
+
+    char linea[256];
+
+    // ======== Leer lista de estados ========
+    archivo.getline(linea, sizeof(linea));
+    if(strncmp(linea, "Estados:", 8) == 0){
+        char *ptr = strchr(linea, ':');
+        ptr++;
+        char *token = strtok(ptr, ", \t\r\n");
+        while(token){
+            agregarEstado(token, 0, 0);
+            token = strtok(nullptr, ", \t\r\n");
         }
     }
 
-    if (!actual) {
-        cout << "Error: no hay estado inicial definido." << endl;
-        return 0;
+    // ======== Leer alfabeto ========
+    archivo.getline(linea, sizeof(linea));
+    if(strncmp(linea, "Alfabeto:", 9) == 0){
+        char *ptr = strchr(linea, ':');
+        ptr++;
+        char *token = strtok(ptr, ", \t\r\n");
+        while(token){
+            numAlfabeto++;
+            alfabeto = (char**)realloc(alfabeto, numAlfabeto * sizeof(char*));
+            longitudAlfabeto = (int*)realloc(longitudAlfabeto, numAlfabeto * sizeof(int));
+
+            int len = strlen(token);
+            alfabeto[numAlfabeto-1] = new char[len+1];
+            strcpy(alfabeto[numAlfabeto-1], token);
+            longitudAlfabeto[numAlfabeto-1] = len;
+
+            token = strtok(nullptr, ", \t\r\n");
+        }
     }
 
-    int lenCadena = strlen(cadena);
+    // ======== Leer estado inicial ========
+    archivo.getline(linea, sizeof(linea));
+    if(strncmp(linea, "Inicial:", 8) == 0){
+        char *ptr = strchr(linea, ':');
+        ptr++;
+        char *token = strtok(ptr, ", \t\r\n");
+        if(token){
+            Nodo *est = buscarEstado(token);
+            if(est){
+                est->esInicial = 1;
+                estadoInicial = est;
+            }
+        }
+    }
 
-    for (int i = 0; i < lenCadena; ++i) {
-        char simbolo[2] = {cadena[i], '\0'};
-        int encontrado = 0;
+    // ======== Leer estados de aceptación ========
+    archivo.getline(linea, sizeof(linea));
+    if(strncmp(linea, "Finales:", 8) == 0){
+        char *ptr = strchr(linea, ':');
+        ptr++;
+        char *token = strtok(ptr, ", \t\r\n");
+        while(token){
+            Nodo *est = buscarEstado(token);
+            if(est) est->esAceptacion = 1;
+            token = strtok(nullptr, ", \t\r\n");
+        }
+    }
 
-        for (int j = 0; j < actual->numSimbolos; ++j) {
-            if (strcmp(actual->simbolos[j], simbolo) == 0) {
-                actual = actual->transiciones[j];
-                encontrado = 1;
+    // ======== Leer línea vacía + encabezado Transiciones ========
+    archivo.getline(linea, sizeof(linea)); // línea vacía
+    archivo.getline(linea, sizeof(linea)); // "Transiciones:"
+
+    // ======== Leer transiciones ========
+    while(archivo.getline(linea, sizeof(linea))){
+        if(strlen(linea) == 0) continue;
+        char *origen = strtok(linea, " \t\r\n");
+        char *simbolo = strtok(nullptr, " \t\r\n");
+        char *destino = strtok(nullptr, " \t\r\n");
+        if(origen && simbolo && destino)
+            agregarTransicion(origen, destino, simbolo);
+    }
+
+    archivo.close();
+}
+
+void AFD::imprimirAFD() const
+{
+    cout << "\n--- AFD ---" << endl;
+    for(int i=0;i<numEstados;i++)
+        estados[i]->imprimirNodo();
+}
+
+int AFD::verificarCadenaValida(const char *cadena)
+{
+    for(int i=0; cadena[i]!='\0'; i++){
+        int valido = 0;
+        char simb[2] = {cadena[i], '\0'};
+        for(int j=0;j<numAlfabeto;j++){
+            if(strcmp(simb, alfabeto[j]) == 0){
+                valido = 1;
                 break;
             }
         }
+        if(!valido) return 0;
+    }
+    return 1;
+}
 
-        if (!encontrado) {
-            cout << "Simbolo no valido: " << simbolo << endl;
-            return 0;
+// ----------------------
+// Evaluar cadena
+// ----------------------
+int AFD::evaluarCadena(const char *cadena)
+{
+    if(!estadoInicial){
+        cout << "Error: No hay estado inicial definido." << endl;
+        return 0;
+    }
+
+    Nodo *actual = estadoInicial;
+    for(int i=0; cadena[i]!='\0'; i++){
+        char simb[2] = {cadena[i], '\0'};
+        Nodo *sig = nullptr;
+        for(int j=0;j<actual->numSimbolos;j++){
+            if(strcmp(actual->simbolos[j], simb) == 0){
+                sig = actual->transiciones[j];
+                break;
+            }
         }
+        if(!sig) return 0;
+        actual = sig;
     }
 
     return actual->esAceptacion;
 }
 
-void AFD::imprimirAF() const
-{
-    cout << "\n--- AFD ---" << endl;
-    for (int i = 0; i < numEstados; ++i)
-        estados[i].imprimirNodo();
-}
-
-int AFD::asegurarUnEstadoInicial() const
-{
-    int contador = 0;
-    for (int i = 0; i < numEstados; ++i)
-        if (estados[i].esInicial) contador++;
-    return contador == 1;
-}
-
-int AFD::verficarEsAfd() const
-{
-    for (int i = 0; i < numEstados; ++i)
-        if (estados[i].numSimbolos > numSimbolos)
-            return 0;
-    return 1;
-}
-
-void AFD::leerDeArchivo(const char* nombreArchivo)
+void AFD::leerCadenaDesdeArchivo(const char *nombreArchivo)
 {
     ifstream archivo(nombreArchivo);
-    if (!archivo) {
-        cout << "No se pudo abrir el archivo: " << nombreArchivo << endl;
-        return;
-    }
-
-    char linea[256];
-    archivo.getline(linea, 256);
-
-    char* token = strtok(linea, " ");
-    while (token) {
-        agregarSimbolo(token);
-        token = strtok(nullptr, " ");
-    }
-
-    while (archivo.getline(linea, 256)) {
-        char indicador[3] = "";
-        char estado[50] = "";
-        char destino[50] = "";
-
-        int esInicial = 0, esAceptacion = 0;
-
-        char* ptr = strtok(linea, " ");
-        if (!ptr) continue;
-
-        if (strcmp(ptr, "->") == 0) {
-            esInicial = 1;
-            ptr = strtok(nullptr, " ");
-        } else if (strcmp(ptr, "*") == 0) {
-            esAceptacion = 1;
-            ptr = strtok(nullptr, " ");
-        }
-
-        strcpy(estado, ptr);
-        agregarEstado(estado, esInicial, esAceptacion);
-
-        for (int i = 0; i < numSimbolos; ++i) {
-            ptr = strtok(nullptr, " ");
-            if (ptr)
-                agregarTransicion(estado, ptr, alfabeto[i]);
-        }
-    }
-
-    archivo.close();
-}
-
-void AFD::leerCadenaDeArchivo(const char* nombreArchivo)
-{
-    ifstream archivo(nombreArchivo);
-    if (!archivo) {
-        cout << "No se pudo abrir el archivo: " << nombreArchivo << endl;
+    if(!archivo.is_open()){
+        cout << "Error: No se pudo abrir " << nombreArchivo << endl;
         return;
     }
 
     char buffer[256];
-    archivo.getline(buffer, 256);
+    archivo.getline(buffer, sizeof(buffer));
     archivo.close();
 
-    int len = strlen(buffer);
-    cadena = new char[len + 1];
-    strcpy(cadena, buffer);
-    longitudCadena = len;
+    if(!verificarCadenaValida(buffer)){
+        cout << "Cadena invalida (simbolos fuera del alfabeto)." << endl;
+        return;
+    }
 
-    cout << "Cadena leída: " << cadena << endl;
-    int resultado = evaluarCadena(cadena);
-    cout << "Resultado: " << (resultado ? "ACEPTADA" : "RECHAZADA") << endl;
+    cout << "Cadena: " << buffer << endl;
+    cout << "Resultado: " << (evaluarCadena(buffer) ? "ACEPTADA" : "RECHAZADA") << endl;
+}
+
+void AFD::ingresarCadenaManual()
+{
+    char buffer[256];
+    cout << "Ingrese una cadena: ";
+    cin >> buffer;
+
+    if(!verificarCadenaValida(buffer)){
+        cout << "Cadena invalida (simbolos fuera del alfabeto)." << endl;
+        return;
+    }
+
+    cout << "Resultado: " << (evaluarCadena(buffer) ? "ACEPTADA" : "RECHAZADA") << endl;
 }

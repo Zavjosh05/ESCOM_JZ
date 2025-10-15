@@ -5,7 +5,7 @@ def extraerEmail(cadena):
     return patron.findall(cadena)
 
 def extraerNombre(cadena):
-    patron = re.compile("Nombre:\s*([\w\.-]+\s[\w\.-]+)")
+    patron = re.compile("Nombre:\s*([\w]+\s[\w]+)")
     return patron.findall(cadena)
 
 def extraerNumero(cadena):
