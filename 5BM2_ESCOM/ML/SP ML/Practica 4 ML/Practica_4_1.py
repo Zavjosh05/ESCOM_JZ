@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, SGDRegressor
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import mean_squared_error, r2_score
 
 data_x = pd.read_csv("datos.csv", usecols=[0])
@@ -21,16 +21,13 @@ def graficar_modelo(x_test, y_test, model, titulo, poly=None, scaler_x=None):
     plt.figure(figsize=(7, 4))
     plt.scatter(x_test, y_test, color="black", label="Datos reales")
 
-    # Generar curva suave
     x_line = np.linspace(x_test.min(), x_test.max(), 200).reshape(-1, 1)
     if poly is not None:
         x_line_t = poly.transform(x_line)
     else:
         x_line_t = x_line
 
-    if scaler_x is not None:
-        x_line_t = scaler_x.transform(x_line_t)
-
+    # Sin escalador: pasamos directamente x_line_t al modelo
     y_line = model.predict(x_line_t)
     plt.plot(x_line, y_line, color="red", label="Predicción")
 
@@ -41,9 +38,7 @@ def graficar_modelo(x_test, y_test, model, titulo, poly=None, scaler_x=None):
     plt.grid(True)
     plt.show()
 
-#Programa:
-
-# Regresiones OLS
+#OLS
 for grado in [1, 2, 3]:
     if grado == 1:
         model = LinearRegression()
@@ -65,56 +60,31 @@ for grado in [1, 2, 3]:
     resultados.append([titulo, mse, r2])
     graficar_modelo(x_test, y_test, model, titulo, poly)
 
-#Regresiones SGD
-# =====================================
-# 4️⃣ Regresiones SGD (corregido)
-# =====================================
-scaler_x = StandardScaler()
-scaler_y = StandardScaler()
-
-# Escalar los datos base (X e y)
-# X_train_scaled = scaler_x.fit_transform(x_train)
-# X_test_scaled = scaler_x.transform(x_test)
-# y_train_scaled = scaler_y.fit_transform(y_train)
-# y_test_scaled = scaler_y.transform(y_test)
-
+#sgd
 for grado in [1, 2, 3]:
     if grado == 1:
-        # 🔹 Regresión lineal simple con SGD
-        X_train_s = X_train_scaled
-        X_test_s = X_test_scaled
+        X_train_s = x_train.values
+        X_test_s = x_test.values
         poly = None
         titulo = "Regresión lineal con SGD"
     else:
-        # 🔹 Crear características polinómicas a partir de los datos ya escalados
         poly = PolynomialFeatures(degree=grado)
-        X_train_poly = poly.fit_transform(X_train_scaled)
-        X_test_poly = poly.transform(X_test_scaled)
-
-        # Escalar nuevamente las características polinómicas
-        scaler_px = StandardScaler()
-        X_train_s = scaler_px.fit_transform(X_train_poly)
-        X_test_s = scaler_px.transform(X_test_poly)
+        X_train_s = poly.fit_transform(x_train)
+        X_test_s = poly.transform(x_test)
         titulo = f"Regresión polinomial grado {grado} con SGD"
 
-    # Entrenamiento del modelo con SGD
-    sgd = SGDRegressor(max_iter=max_iter, alpha=alpha, tol=1e-3, random_state=0)
-    sgd.fit(X_train_s, y_train_scaled.ravel())
+    sgd = SGDRegressor(max_iter=max_iter, eta0=alpha, learning_rate='constant', random_state=0)
+    sgd.fit(X_train_s, y_train.values.ravel())
 
-    # Predicción (desescalando la salida)
-    y_pred_scaled = sgd.predict(X_test_s)
-    y_pred = scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1))
+    y_pred = sgd.predict(X_test_s)
 
-    # Evaluación
     mse = mean_squared_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
     resultados.append([titulo, mse, r2])
 
-    # Graficar resultados
-    graficar_modelo(x_test, y_test, sgd, titulo, poly, scaler_px if grado > 1 else scaler_x)
+    graficar_modelo(x_test, y_test, sgd, titulo, poly)
 
-
-#Resultados
+#resultados
 df_resultados = pd.DataFrame(resultados, columns=["Modelo", "MSE", "R2"])
 print("\n" + "="*60)
 print("RESUMEN DE RESULTADOS")
