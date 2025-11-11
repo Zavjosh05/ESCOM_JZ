@@ -5,11 +5,13 @@ from sklearn.naive_bayes import GaussianNB, MultinomialNB
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 
+
 # ----------------------------------------------------------
 # FUNCIONES AUXILIARES
 # ----------------------------------------------------------
 
 def validar_modelo(X_train, y_train, modelo, k=3):
+    """Realiza validación cruzada con KFold y devuelve accuracies."""
     kf = KFold(n_splits=k, shuffle=True, random_state=0)
     accuracies = []
     for train_index, val_index in kf.split(X_train):
@@ -20,7 +22,9 @@ def validar_modelo(X_train, y_train, modelo, k=3):
         accuracies.append(accuracy_score(y_val, y_pred))
     return accuracies, np.mean(accuracies)
 
-def probar_modelo_final(modelo, X_train, y_train, X_test, y_test, dataset_name):
+
+def probar_modelo_final(modelo, X_train, y_train, X_test, y_test, dataset_name, ax=None):
+    """Entrena el modelo y muestra matriz de confusión y reporte de clasificación."""
     modelo.fit(X_train, y_train)
     y_pred = modelo.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
@@ -32,11 +36,14 @@ def probar_modelo_final(modelo, X_train, y_train, X_test, y_test, dataset_name):
     print("Matriz de confusión:")
     print(confusion_matrix(y_test, y_pred))
 
-    disp = ConfusionMatrixDisplay(confusion_matrix(y_test, y_pred))
-    disp.plot(cmap="Blues")
-    plt.title(f"Matriz de confusión - {dataset_name}")
-    plt.show()
+    # Graficar en subplot si se proporciona un eje
+    if ax is not None:
+        disp = ConfusionMatrixDisplay(confusion_matrix(y_test, y_pred))
+        disp.plot(cmap="Blues", ax=ax, colorbar=False)
+        ax.set_title(f"Matriz de confusión - {dataset_name}")
+        ax.grid(False)
     return acc
+
 
 # ----------------------------------------------------------
 # PROCESO PARA IRIS
@@ -44,6 +51,7 @@ def probar_modelo_final(modelo, X_train, y_train, X_test, y_test, dataset_name):
 print("\n=== Procesando dataset: iris.csv ===")
 
 iris = pd.read_csv("iris.csv")
+
 X_iris = iris.iloc[:, :-1]
 y_iris = iris.iloc[:, -1]
 
@@ -52,6 +60,7 @@ X_train_i, X_test_i, y_train_i, y_test_i = train_test_split(
 )
 
 resultados_iris = {"Distribución": [], "Pliegue": [], "Accuracy": []}
+
 for modelo, nombre in [(GaussianNB(), "Normal"), (MultinomialNB(), "Multinomial")]:
     accuracies, promedio = validar_modelo(X_train_i, y_train_i, modelo)
     for i, acc in enumerate(accuracies, start=1):
@@ -67,33 +76,35 @@ print("\nTabla 1 – Validación cruzada (iris.csv):")
 print(tabla_iris)
 
 mejor_modelo_iris = GaussianNB() if tabla_iris.iloc[3, 2] > tabla_iris.iloc[7, 2] else MultinomialNB()
-acc_iris = probar_modelo_final(mejor_modelo_iris, X_train_i, y_train_i, X_test_i, y_test_i, "iris.csv")
 
 # ----------------------------------------------------------
-# PROCESO PARA EMAILS
+# PROCESO PARA EMAILS (sin eliminar filas)
 # ----------------------------------------------------------
 print("\n=== Procesando dataset: emails.csv ===")
 
 emails = pd.read_csv("emails.csv")
-emails.dropna(subset=[emails.columns[-1]], inplace=True)
 
+# Limpieza sin eliminar filas
 y_raw = emails.iloc[:, -1].astype(str).str.strip().str.lower()
-pd.set_option('future.no_silent_downcasting', True)
+
 y_emails = y_raw.replace({
     'spam': 1, 'ham': 0, 'not spam': 0, 'non-spam': 0,
-    '1': 1, '0': 0, '1.0': 1, '0.0': 0, 'true': 1, 'false': 0
+    '1': 1, '0': 0, '1.0': 1, '0.0': 0, 'true': 1, 'false': 0,
+    'nan': 0, '': 0
 })
 
-y_emails = pd.to_numeric(y_emails, errors='coerce')
-emails = emails[~y_emails.isna()]
-y_emails = y_emails[~y_emails.isna()].astype(int)
-X_emails = emails.iloc[:, 1:-1]
+# Intentar conversión numérica, NaN => 0
+y_emails = pd.to_numeric(y_emails, errors='coerce').fillna(0).astype(int)
+
+# Mantener todas las filas
+X_emails = emails.iloc[:, 1:-1].fillna(0)
 
 X_train_e, X_test_e, y_train_e, y_test_e = train_test_split(
     X_emails, y_emails, test_size=0.3, random_state=0, shuffle=True
 )
 
 resultados_emails = {"Distribución": [], "Pliegue": [], "Accuracy": []}
+
 for modelo, nombre in [(GaussianNB(), "Normal"), (MultinomialNB(), "Multinomial")]:
     accuracies, promedio = validar_modelo(X_train_e, y_train_e, modelo)
     for i, acc in enumerate(accuracies, start=1):
@@ -109,8 +120,20 @@ print("\nTabla 1 – Validación cruzada (emails.csv):")
 print(tabla_emails)
 
 mejor_modelo_emails = GaussianNB() if tabla_emails.iloc[3, 2] > tabla_emails.iloc[7, 2] else MultinomialNB()
-acc_emails = probar_modelo_final(mejor_modelo_emails, X_train_e, y_train_e, X_test_e, y_test_e, "emails.csv")
 
+# ----------------------------------------------------------
+# VISUALIZAR AMBAS MATRICES EN UNA SOLA FIGURA
+# ----------------------------------------------------------
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+acc_iris = probar_modelo_final(mejor_modelo_iris, X_train_i, y_train_i, X_test_i, y_test_i, "iris.csv", ax1)
+acc_emails = probar_modelo_final(mejor_modelo_emails, X_train_e, y_train_e, X_test_e, y_test_e, "emails.csv", ax2)
+
+plt.tight_layout()
+plt.show()
+
+# ----------------------------------------------------------
+# TABLA 2: Resultados de pruebas finales
+# ----------------------------------------------------------
 tabla_final = pd.DataFrame({
     "Dataset": ["iris.csv", "emails.csv"],
     "Distribución": ["GaussianNB" if isinstance(mejor_modelo_iris, GaussianNB) else "MultinomialNB",

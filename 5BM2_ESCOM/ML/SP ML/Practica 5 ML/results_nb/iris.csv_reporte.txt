@@ -1,0 +1,19 @@
+Dataset: iris.csv
+Mejor modelo: Normal
+Accuracy prueba: 0.9778
+
+Reporte de clasificacion:
+              precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        15
+           1       0.94      1.00      0.97        15
+           2       1.00      0.93      0.97        15
+
+    accuracy                           0.98        45
+   macro avg       0.98      0.98      0.98        45
+weighted avg       0.98      0.98      0.98        45
+
+Matriz de confusion:
+[[15  0  0]
+ [ 0 15  0]
+ [ 0  1 14]]

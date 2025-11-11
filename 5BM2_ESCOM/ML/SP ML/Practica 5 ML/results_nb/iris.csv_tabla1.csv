@@ -1,0 +1,9 @@
+Dataset,Distribucion,Pliegue,Accuracy
+iris.csv,Normal,1,0.9714285714285714
+iris.csv,Normal,2,0.9714285714285714
+iris.csv,Normal,3,0.8857142857142857
+iris.csv,Normal,Promedio,0.9428571428571427
+iris.csv,Multinomial,1,0.7142857142857143
+iris.csv,Multinomial,2,0.6571428571428571
+iris.csv,Multinomial,3,0.9428571428571428
+iris.csv,Multinomial,Promedio,0.7714285714285714
